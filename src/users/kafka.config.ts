@@ -6,7 +6,7 @@ dotenv.config();
 
 const kafka = new Kafka({
  clientId: 'nest-challenge',
- brokers: [process.env.KAFKA_URL],
+ brokers: [process.env.KAFKA_BROKER],
  logLevel: logLevel.ERROR,
 });
 
