@@ -1,9 +1,12 @@
 
 import { Kafka, logLevel } from 'kafkajs';
+import * as dotenv from 'dotenv';
+
+dotenv.config();
 
 const kafka = new Kafka({
  clientId: 'nest-challenge',
- brokers: ['localhost:7075'],
+ brokers: [process.env.KAFKA_URL],
  logLevel: logLevel.ERROR,
 });
 
