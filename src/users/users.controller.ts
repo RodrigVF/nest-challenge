@@ -18,8 +18,8 @@ export class UsersController {
   @Get(':id')
   @ApiOperation({ summary: 'Retorna um usuário por ID' })
   @ApiResponse({ status: 200, description: 'Detalhes do usuário' })
-  async findOne(@Param('id') id: number) {
-    return this.usersService.findOne(id);
+  async findOne(@Param('id') id: string): Promise<UserDto> {
+    return this.usersService.findOne(Number(id));
   }
 
   @Post()
@@ -39,7 +39,7 @@ export class UsersController {
   @Put(':id')
   @ApiOperation({ summary: 'Atualiza um usuário por ID' })
   @ApiResponse({ status: 200, description: 'Usuário atualizado com sucesso' })
-  async update(@Param('id') id: number, @Body() userDto: UserDto): Promise<void> {
+  async update(@Param('id') id: number, @Body() userDto: UserDto): Promise<string> {
     try{
     return this.usersService.update(id, userDto);
     } catch (error) {
@@ -53,7 +53,7 @@ export class UsersController {
   @Delete(':id')
   @ApiOperation({ summary: 'Deleta um usuário por ID' })
   @ApiResponse({ status: 200, description: 'Usuário removido com sucesso' })
-  async remove(@Param('id') id: number): Promise<void> {
+  async remove(@Param('id') id: number): Promise<string> {
     return this.usersService.remove(id);
   }
 }

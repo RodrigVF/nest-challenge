@@ -1,8 +1,13 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsOptional, IsString, IsEmail, IsBoolean, IsDate } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString, IsEmail, IsBoolean, IsInt } from 'class-validator';
 
 export class UserDto {
-  @ApiProperty({ description: 'Nome de usuário escolhido', example: 'JoaoSilva' })
+  @ApiProperty({ description: 'Identificador único do usuário', example: 1 })
+  @IsInt()
+  @IsOptional()
+  readonly id?: number;
+
+  @ApiProperty({ description: 'Nome de usuário escolhido', example: 'joaosilva' })
   @IsString()
   @IsNotEmpty()
   readonly username: string;

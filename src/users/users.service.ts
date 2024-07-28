@@ -33,7 +33,12 @@ export class UsersService implements OnModuleInit {
   }
 
   async findOne(id: number): Promise<User> {
-    return this.userRepository.findOneBy({ id });
+    const user = await this.userRepository.findOneBy({ id });
+		console.log(user)
+    if (!user) {
+      throw new UserBadRequestException('Usuário não encontrado');
+    }
+    return user;
   }
 
   async create(userDto: UserDto): Promise<string> {
@@ -76,12 +81,12 @@ export class UsersService implements OnModuleInit {
     return `Usuário ${userDto.username} criado com sucesso`;
   }
 
-	async update(id: number, userDto: UserDto): Promise<void> {
+	async update(id: number, userDto: UserDto): Promise<string> {
 		// Encontrar o usuário pelo ID
 		const user = await this.userRepository.findOneBy({ id });
 	
 		if (!user) {
-			throw new Error('User not found'); // Considerar lançar um erro se o usuário não for encontrado
+      throw new UserBadRequestException('Usuário não encontrado');
 		}
 	
 		// Atualizar as propriedades do usuário apenas com os valores fornecidos
@@ -100,10 +105,22 @@ export class UsersService implements OnModuleInit {
 			messages: [{ value: `Usuário atualizado: ${userDto.username}` }],
 		});
 		await kafkaProducer.disconnect();
+
+		return `Usuário ${userDto.username} atualizado com sucesso`;
 	}
 
-  async remove(id: number): Promise<void> {
+  async remove(id: number): Promise<string> {
     await this.userRepository.delete(id);
+
+		// Enviar mensagem para o Kafka
+		await kafkaProducer.connect();
+		await kafkaProducer.send({
+			topic: 'users-topic',
+			messages: [{ value: `Usuário deletado, ID: ${id}` }],
+		});
+		await kafkaProducer.disconnect();
+
+		return `Usuário de ID: ${id} foi deletado`;
   }
 
   private async initializeKafkaConsumer() {
