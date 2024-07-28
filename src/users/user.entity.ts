@@ -1,10 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsInt, IsNotEmpty, IsOptional, IsString, IsEmail, IsBoolean } from 'class-validator';
+import { IsInt, IsNotEmpty, IsString, IsEmail, IsBoolean } from 'class-validator';
 import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, BeforeInsert, BeforeUpdate } from 'typeorm';
-import { randomBytes, scrypt } from 'crypto';
-import { promisify } from 'util';
-
-const scryptAsync = promisify(scrypt);
+import * as bcrypt from 'bcryptjs';
 
 @Entity()
 export class User {
@@ -47,12 +44,7 @@ export class User {
   isActive: boolean;
 
   @BeforeInsert()
-  @BeforeUpdate()
   async hashPassword() {
-    if (this.password) {
-      const salt = randomBytes(16).toString('hex');
-      const key = await scryptAsync(this.password, salt, 64) as Buffer;
-      this.password = `${salt}:${key.toString('hex')}`;
-    }
+    this.password = await bcrypt.hash(this.password, 10);
   }
 }

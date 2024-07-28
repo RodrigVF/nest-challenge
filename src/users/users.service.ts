@@ -2,11 +2,11 @@ import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from './user.entity';
-import { UserDto } from './user.dto';
+import { UpdateUserDto, UserDto } from './user.dto';
 import { kafkaProducer, kafkaConsumer } from './kafka.config';
 import { UserBadRequestException } from './exceptions/user.exception';
 import { Redis } from 'ioredis';
-
+import * as bcrypt from 'bcryptjs';
 
 @Injectable()
 export class UsersService implements OnModuleInit {
@@ -26,15 +26,13 @@ export class UsersService implements OnModuleInit {
       return JSON.parse(cachedUsers);
     }
 
-    // Caso não esteja no cache, buscar no banco de dados e armazenar no cache
     const users = await this.userRepository.find();
-    await this.redisClient.set('users', JSON.stringify(users));
+    await this.redisClient.set('users', JSON.stringify(users), 'EX', 1800);
     return users;
   }
 
   async findOne(id: number): Promise<User> {
     const user = await this.userRepository.findOneBy({ id });
-		console.log(user)
     if (!user) {
       throw new UserBadRequestException('Usuário não encontrado');
     }
@@ -46,11 +44,9 @@ export class UsersService implements OnModuleInit {
     const existingUsername = await this.userRepository.findOneBy({
       username: userDto.username,
     });
-		
 		const existingEmail = await this.userRepository.findOneBy({
       email: userDto.email,
     });
-
     if (existingUsername || existingEmail) {
       throw new UserBadRequestException('Nome de usuário ou e-mail já existe');
     }
@@ -63,64 +59,62 @@ export class UsersService implements OnModuleInit {
     user.isActive = userDto.isActive ?? true;
 
     await this.userRepository.save(user);
-		await this.redisClient.del('users');
+    await this.redisClient.del('users');
 
-    // Enviar mensagem para o Kafka
-    try {
-      await kafkaProducer.connect();
-      await kafkaProducer.send({
-        topic: 'users-topic',
-        messages: [{ value: `Usuário criado: ${userDto.username}` }],
-      });
-      await kafkaProducer.disconnect();
-    } catch (error) {
-      console.error('Falha ao enviar mensagem para o Kafka:', error);
-      throw new UserBadRequestException('Falha ao enviar mensagem para o Kafka');
-    }
-
+		await this.sendMessageToKafka(`Usuário criado: ${userDto.username}`)
     return `Usuário ${userDto.username} criado com sucesso`;
   }
 
-	async update(id: number, userDto: UserDto): Promise<string> {
-		// Encontrar o usuário pelo ID
+	async update(id: number, updateUserDto: UpdateUserDto): Promise<string> {
 		const user = await this.userRepository.findOneBy({ id });
+		if (!user) {
+			throw new UserBadRequestException('Usuário não encontrado');
+		}
 	
+		// Atualizar as propriedades do usuário apenas com os valores fornecidos
+		if (updateUserDto.username) user.username = updateUserDto.username;
+		if (updateUserDto.email) user.email = updateUserDto.email;
+		if (updateUserDto.fullName) user.fullName = updateUserDto.fullName;
+		if (updateUserDto.dateRegistered) user.dateRegistered = updateUserDto.dateRegistered;
+		if (updateUserDto.isActive !== undefined) user.isActive = updateUserDto.isActive;
+    if (updateUserDto.password) {
+      const isSamePassword = await bcrypt.compare(updateUserDto.password, user.password);
+      if (!isSamePassword) {
+        user.password = await bcrypt.hash(updateUserDto.password, 10);
+      }
+    }
+
+		await this.userRepository.save(user);
+		await this.redisClient.del('users');
+	
+		await this.sendMessageToKafka(`Usuário atualizado: ${updateUserDto.username || user.username}`);
+		return `Usuário ${updateUserDto.username || user.username} atualizado com sucesso`;
+	}
+
+  async remove(id: number): Promise<string> {
+		const user = await this.userRepository.findOneBy({ id });
 		if (!user) {
       throw new UserBadRequestException('Usuário não encontrado');
 		}
 	
-		// Atualizar as propriedades do usuário apenas com os valores fornecidos
-		if (userDto.username) user.username = userDto.username;
-		if (userDto.password) user.password = userDto.password; // A senha será criptografada na entidade
-		if (userDto.email) user.email = userDto.email;
-		if (userDto.fullName) user.fullName = userDto.fullName;
-	
-		// Salvar o usuário atualizado
-		await this.userRepository.save(user);
-
-		// Enviar mensagem para o Kafka
-		await kafkaProducer.connect();
-		await kafkaProducer.send({
-			topic: 'users-topic',
-			messages: [{ value: `Usuário atualizado: ${userDto.username}` }],
-		});
-		await kafkaProducer.disconnect();
-
-		return `Usuário ${userDto.username} atualizado com sucesso`;
-	}
-
-  async remove(id: number): Promise<string> {
-    await this.userRepository.delete(id);
-
-		// Enviar mensagem para o Kafka
-		await kafkaProducer.connect();
-		await kafkaProducer.send({
-			topic: 'users-topic',
-			messages: [{ value: `Usuário deletado, ID: ${id}` }],
-		});
-		await kafkaProducer.disconnect();
+		await this.userRepository.delete(id);
+    await this.redisClient.del('users');
 
 		return `Usuário de ID: ${id} foi deletado`;
+  }
+
+	private async sendMessageToKafka(message: string) {
+    try {
+      await kafkaProducer.connect();
+      await kafkaProducer.send({
+        topic: 'users-topic',
+        messages: [{ value: message }],
+      });
+    } catch (error) {
+      console.error('Falha ao enviar mensagem para o Kafka:', error);
+    } finally {
+      await kafkaProducer.disconnect();
+    }
   }
 
   private async initializeKafkaConsumer() {

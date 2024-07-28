@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Post, Param, Put, Delete } from '@nestjs/common';
 import { UsersService } from './users.service';
-import { UserDto } from './user.dto';
+import { UpdateUserDto, UserDto } from './user.dto';
 import { ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { UserBadRequestException } from './exceptions/user.exception';
 
@@ -39,14 +39,14 @@ export class UsersController {
   @Put(':id')
   @ApiOperation({ summary: 'Atualiza um usuário por ID' })
   @ApiResponse({ status: 200, description: 'Usuário atualizado com sucesso' })
-  async update(@Param('id') id: number, @Body() userDto: UserDto): Promise<string> {
-    try{
-    return this.usersService.update(id, userDto);
+  async update(@Param('id') id: number, @Body() updateUserDto: UpdateUserDto): Promise<string> {
+    try {
+      return this.usersService.update(id, updateUserDto);
     } catch (error) {
-        if (error instanceof UserBadRequestException) {
+      if (error instanceof UserBadRequestException) {
         throw new UserBadRequestException(error.message);
-        }
-        throw error;
+      }
+      throw error;
     }
   }
 
